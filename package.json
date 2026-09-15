@@ -13,6 +13,8 @@
     "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "verify:activation": "tsx scripts/verify-activation.ts",
+    "verify:activation:managed": "firebase emulators:exec --only firestore --project demo-aethera-trial \"npm run verify:activation\"",
     "inspect:activation": "tsx scripts/inspect-activation.ts"
   },
   "dependencies": {

@@ -58,6 +58,17 @@ What each command does:
 
 **These are the existing checks, not the verification your assignment asks for.** A pass from `npm test` or from the current workflow does not establish that activation works. Part of the assignment is deciding what a pass should mean and building the command that proves it.
 
+### The verification
+
+`npm run verify:activation` is the gate. A pass from it means the six required cases in [ACTIVATION_CONTRACT.md](ACTIVATION_CONTRACT.md) ran against a live emulator and proved their outcomes. A case that failed, was skipped or never executed fails the gate, and so does an emulator that is not reachable.
+
+| Command | What it does |
+|---|---|
+| `npm run verify:activation` | The gate, against an emulator that is already running. It never starts one, so a missing dependency stays visible |
+| `npm run verify:activation:managed` | The same gate, supplying its own emulator for the length of the run. One command from a fresh clone, and what GitHub Actions runs |
+
+`npm test` is still useful while working and still skips the integration tests when no emulator is present. The gate refuses to. [docs/VERIFICATION.md](docs/VERIFICATION.md) explains every way it fails and how each of the six cases is tied to a check.
+
 You can rerun any of these as often as you like without a fresh clone. `npm run seed` returns the data to the baseline.
 
 ## 3. File map
@@ -70,7 +81,9 @@ You can rerun any of these as often as you like without a fresh clone. `npm run 
 | `src/config.ts`, `src/db.ts`, `src/emulator.ts` | The local-only connection guard, the Firestore client, emulator helpers |
 | `src/model.ts`, `src/validate.ts` | Collection names, document shapes, request validation |
 | `fixtures/baseline.ts`, `fixtures/seed.ts` | The baseline data and the reset that writes it |
-| `scripts/` | `doctor`, `seed` and `inspect:activation` |
+| `scripts/` | `doctor`, `seed`, `inspect:activation` and `verify-activation`, the gate |
+| `verification/requiredScenarios.ts` | The six required cases from the contract, in a form a program can read |
+| `docs/VERIFICATION.md` | What a pass from the gate means and what makes it fail |
 | `tests/unit/` | Tests that need no emulator |
 | `tests/integration/` | Tests that run against the emulator |
 | `tests/support/` | Jest setup shared by the tests |
