@@ -21,7 +21,13 @@ From a fresh clone with no emulator running, one command does the whole thing:
 npm ci && npm run verify:activation:managed
 ```
 
-## 1. The original false green
+## 1. How the failed activation got past the checks
+
+Three separate things had to be true for a broken activation to reach a green check.
+They are independent, and each one on its own is enough to let a defect through, so
+all three are closed rather than just the one that happened to fire here.
+
+### The starter check, passing on the broken state
 
 The starter test file and the starter baseline, both restored from `main`.
 
@@ -41,10 +47,8 @@ Per test, from the same run:
 ```
 
 The last line is the false green. `harbor starting a practice succeeds` passed while
-the start was refused. The old check read the HTTP code, and the contract makes a
-refusal an HTTP 200 carrying `{"status": "refused"}`.
-
-What was actually happening on the same data:
+the start was refused and no session was written. What was actually happening on the
+same data:
 
 ```
 $ npm run inspect:activation -- --practitioner harbor
@@ -56,13 +60,83 @@ practiceSessions for inspect-harbor: 0
 ```
 
 A person joining harbor could accept the invitation and see the right practitioner,
-then nothing happened when they started a practice. No session was ever written.
+then nothing happened when they started a practice.
 
-Two further reasons this reached a green check:
+### Layer 1: the check read the HTTP code, not the outcome
 
-- The workflow ran only `npm run typecheck`, so no test ran on a pull request at all.
-- With no emulator the integration suite was skipped and the run still exited 0, so
-  the whole suite could vanish without the check noticing.
+`tests/integration/activation.test.ts` on `main`:
+
+```ts
+    it('starting a practice succeeds', async () => {
+      const res = await request(app)
+        .post('/practices/start')
+        .send({ personId, practiceId: fixture.practiceId });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toBeDefined();
+    });
+```
+
+`ACTIVATION_CONTRACT.md` is explicit that a domain refusal is deliberately HTTP 200
+carrying `{"status": "refused"}`, and says to read the `status` field rather than the
+HTTP code. This check reads only the HTTP code. The refused response is a 200 and its
+body is defined, so both assertions hold and the test named "succeeds" passes on a
+refusal. It also never asserts the returned practitioner or practice, and never looks
+for the `practiceSessions` document that the contract says makes a start real.
+
+Worth noting what is not wrong here. The invitation and practitioner checks for both
+practitioners were soundly written and genuinely passed. Only the third assertion was
+hollow, so reading the file quickly gives no sense that anything is missing.
+
+### Layer 2: the pull request check never ran the tests
+
+`.github/workflows/checks.yml` on `main`, in full:
+
+```yaml
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+```
+
+One job, and it compiles. `npm run typecheck` passes on this repository whatever the
+data says, because the defect is a missing document rather than a type error. So the
+weak check in layer 1 never ran on a pull request at all. Even a perfectly written
+test suite would have proved nothing here.
+
+### Layer 3: a missing emulator was a skip, not a failure
+
+`tests/support/globalSetup.ts` probed the emulator port and recorded the answer, and
+`tests/support/emulator.ts` swapped `describe` for `describe.skip` when it was absent.
+Measured on the starter files:
+
+```
+$ env -u FIRESTORE_EMULATOR_HOST npx jest
+[setup] Firestore emulator not available, integration tests will be skipped: FIRESTORE_EMULATOR_HOST is not set. This sandbox only runs against the local Firestore emulator. Start it with "npm run emulators", then run: export FIRESTORE_EMULATOR_HOST=127.0.0.1:8085
+Test Suites: 1 skipped, 4 passed, 4 of 5 total
+Tests:       6 skipped, 17 passed, 23 total
+exit code: 0
+```
+
+The entire integration suite disappeared and the run still exited 0. The skip is
+announced in a `[setup]` line that nothing enforces. So even after fixing layer 1 and
+wiring the tests into CI, a runner without Java, a changed port, or an emulator that
+failed to start would have produced a green check with nothing verified.
+
+### Why all three had to be closed
+
+Fixing only the assertion leaves a gate that passes when no emulator is present.
+Fixing only the workflow leaves a gate that passes on a refusal. Fixing only the skip
+leaves both of the others. The sections below show the repaired check failing and
+passing, and then the gate refusing each of the remaining two ways.
 
 ## 2. A meaningful failure on the broken state
 
