@@ -20,3 +20,42 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+
+  # A pull request passes only when the six required cases in
+  # ACTIVATION_CONTRACT.md have run against a live emulator and proved their
+  # outcomes. A case that fails, is skipped or never runs fails this job, and so
+  # does an emulator that is not available.
+  activation-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+
+      - name: Cache the Firestore emulator
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: firebase-emulators-${{ runner.os }}-
+
+      # The runner has no emulator of its own, so this uses the managed variant,
+      # which supplies one for the length of the run and then stops it.
+      - name: Verify the required activation scenarios
+        run: npm run verify:activation:managed
+
+      - name: Publish the coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: activation-coverage
+          path: reports/activation-coverage.json
+          if-no-files-found: warn

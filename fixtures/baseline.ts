@@ -37,6 +37,7 @@ export const BASELINE: Record<string, Record<string, unknown>> = {
   'practiceConfigs/_global': { description: 'Settings shared by every practitioner.' },
   'practiceConfigs/cedar/versions/cedar-v2': { practiceAccess: { enabled: false } },
   'practiceConfigs/cedar/versions/cedar-v3': { practiceAccess: { enabled: true } },
+  'practiceConfigs/harbor/versions/harbor-v1': { practiceAccess: { enabled: true } },
 };
 
 /** Handy ids for tests and tools. */
